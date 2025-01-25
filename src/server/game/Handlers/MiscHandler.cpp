@@ -397,7 +397,7 @@ void WorldSession::HandleWhoOpcode(WorldPacket& recvData)
             continue;
         }
 
-        std::string playerName = ""; //temp storage
+        std::string playerName; //temp storage
 
         //definition of playerName depending on the (player/GM)'s rank
         if (target.GetSecurity() == 1) // Si el rango es igual a 1
@@ -405,6 +405,10 @@ void WorldSession::HandleWhoOpcode(WorldPacket& recvData)
             playerName = "|cffFFFFFF[|r|cffFA8258Staff|cffffffff]|r  " + target.GetPlayerName();
         }
         else if (target.GetSecurity() == 4) // Si el rango es igual a 4
+        {
+            playerName = "Owner  " + target.GetPlayerName();
+        }
+        else if (target.GetSecurity() == 5) // Si el rango es igual a 4
         {
             playerName = "|cffFFFFFF[|r|cffFA8258Owner|cffffffff]|r  " + target.GetPlayerName();
         }
