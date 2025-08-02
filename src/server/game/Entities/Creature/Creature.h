@@ -39,7 +39,7 @@ class CreatureGroup;
 
 #define MAX_VENDOR_ITEMS 150    // Limitation in 3.x.x item count in SMSG_LIST_INVENTORY
 
-class Creature : public Unit, public GridObject<Creature>, public MovableMapObject
+class Creature : public Unit, public GridObject<Creature>, public MovableMapObject, public UpdatableMapObject
 {
 public:
     explicit Creature(bool isWorldObject = false);
@@ -70,10 +70,11 @@ public:
     void SetCorpseDelay(uint32 delay) { m_corpseDelay = delay; }
     void SetCorpseRemoveTime(uint32 delay);
     [[nodiscard]] uint32 GetCorpseDelay() const { return m_corpseDelay; }
+    [[nodiscard]] bool HasFlagsExtra(uint32 flag) const { return GetCreatureTemplate()->HasFlagsExtra(flag); }
     [[nodiscard]] bool IsRacialLeader() const { return GetCreatureTemplate()->RacialLeader; }
-    [[nodiscard]] bool IsCivilian() const { return GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_CIVILIAN; }
-    [[nodiscard]] bool IsTrigger() const { return GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_TRIGGER; }
-    [[nodiscard]] bool IsGuard() const { return GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_GUARD; }
+    [[nodiscard]] bool IsCivilian() const { return HasFlagsExtra(CREATURE_FLAG_EXTRA_CIVILIAN); }
+    [[nodiscard]] bool IsTrigger() const { return HasFlagsExtra(CREATURE_FLAG_EXTRA_TRIGGER); }
+    [[nodiscard]] bool IsGuard() const { return HasFlagsExtra(CREATURE_FLAG_EXTRA_GUARD); }
     CreatureMovementData const& GetMovementTemplate() const;
     [[nodiscard]] bool CanWalk() const { return GetMovementTemplate().IsGroundAllowed(); }
     [[nodiscard]] bool CanSwim() const override;
@@ -127,7 +128,7 @@ public:
 
     [[nodiscard]] bool IsDungeonBoss() const;
     [[nodiscard]] bool IsImmuneToKnockback() const;
-    [[nodiscard]] bool IsAvoidingAOE() const { return GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_AVOID_AOE; }
+    [[nodiscard]] bool IsAvoidingAOE() const { return HasFlagsExtra(CREATURE_FLAG_EXTRA_AVOID_AOE); }
 
     uint8 getLevelForTarget(WorldObject const* target) const override; // overwrite Unit::getLevelForTarget for boss level support
 
@@ -272,7 +273,7 @@ public:
     bool HasSearchedAssistance() { return m_AlreadySearchedAssistance; }
     bool CanAssistTo(Unit const* u, Unit const* enemy, bool checkfaction = true) const;
     bool _IsTargetAcceptable(Unit const* target) const;
-    [[nodiscard]] bool CanIgnoreFeignDeath() const { return (GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_IGNORE_FEIGN_DEATH) != 0; }
+    [[nodiscard]] bool CanIgnoreFeignDeath() const { return HasFlagsExtra(CREATURE_FLAG_EXTRA_IGNORE_FEIGN_DEATH); }
 
     // pussywizard: Updated at faction change, disable move in line of sight if actual faction is not hostile to anyone
     void UpdateMoveInLineOfSightState();
@@ -359,8 +360,10 @@ public:
 
     Unit* SelectVictim();
 
-    void SetDisableReputationGain(bool disable) { DisableReputationGain = disable; }
-    [[nodiscard]] bool IsReputationGainDisabled() const { return DisableReputationGain; }
+    void SetReputationRewardDisabled(bool disable) { DisableReputationReward = disable; }
+    [[nodiscard]] bool IsReputationRewardDisabled() const { return DisableReputationReward; }
+    void SetLootRewardDisabled(bool disable) { DisableLootReward = disable; }
+    [[nodiscard]] bool IsLootRewardDisabled() const { return DisableLootReward; }
     [[nodiscard]] bool IsDamageEnoughForLootingAndReward() const;
     void LowerPlayerDamageReq(uint32 unDamage, bool damagedByPlayer = true);
     void ResetPlayerDamageReq();
@@ -372,8 +375,6 @@ public:
     static float _GetDamageMod(int32 Rank);
 
     float m_SightDistance, m_CombatDistance;
-
-    bool m_isTempWorldObject; //true when possessed
 
     // Handling caster facing during spellcast
     void SetTarget(ObjectGuid guid = ObjectGuid::Empty) override;
@@ -388,12 +389,15 @@ public:
     void ClearLastLeashExtensionTimePtr();
     time_t GetLastLeashExtensionTime() const;
     void UpdateLeashExtensionTime();
+    uint8 GetLeashTimer() const;
 
     bool IsFreeToMove();
     static constexpr uint32 MOVE_CIRCLE_CHECK_INTERVAL = 3000;
     static constexpr uint32 MOVE_BACKWARDS_CHECK_INTERVAL = 2000;
+    static constexpr uint32 EXTEND_LEASH_CHECK_INTERVAL = 3000;
     uint32 m_moveCircleMovementTime = MOVE_CIRCLE_CHECK_INTERVAL;
     uint32 m_moveBackwardsMovementTime = MOVE_BACKWARDS_CHECK_INTERVAL;
+    uint32 m_extendLeashTime = EXTEND_LEASH_CHECK_INTERVAL;
 
     [[nodiscard]] bool HasSwimmingFlagOutOfCombat() const
     {
@@ -429,6 +433,8 @@ public:
     bool IsCombatMovementAllowed() const { return _isCombatMovementAllowed; }
 
     std::string GetDebugInfo() const override;
+
+    bool IsUpdateNeeded() override;
 
 protected:
     bool CreateFromProto(ObjectGuid::LowType guidlow, uint32 Entry, uint32 vehId, const CreatureData* data = nullptr);
@@ -478,7 +484,8 @@ protected:
     Position m_homePosition;
     Position m_transportHomePosition;
 
-    bool DisableReputationGain;
+    bool DisableReputationReward;
+    bool DisableLootReward;
 
     CreatureTemplate const* m_creatureInfo;   // in difficulty mode > 0 can different from sObjectMgr->GetCreatureTemplate(GetEntry())
     CreatureData const* m_creatureData;

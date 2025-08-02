@@ -322,15 +322,20 @@ protected:
 struct PacketCounter
 {
     time_t lastReceiveTime;
-    uint32 amountCounter;
+    uint16 amountCounter;
 };
 
 /// Player session in the World
 class WorldSession
 {
 public:
-    WorldSession(uint32 id, std::string&& name, std::shared_ptr<WorldSocket> sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter, bool isARecruiter, bool skipQueue, uint32 TotalTime);
+    WorldSession(uint32 id, std::string&& name, uint32 accountFlags, std::shared_ptr<WorldSocket> sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter, bool isARecruiter, bool skipQueue, uint32 TotalTime);
     ~WorldSession();
+
+    uint32 GetAccountFlags() const { return _accountFlags; }
+    bool HasAccountFlag(uint32 flag) const { return (_accountFlags & flag) != 0; }
+    void UpdateAccountFlag(uint32 flag, bool remove = false);
+    void ValidateAccountFlags();
 
     bool IsGMAccount() const;
 
@@ -446,7 +451,7 @@ public:
 
     void SendTradeStatus(TradeStatus status);
     void SendUpdateTrade(bool trader_data = true);
-    void SendCancelTrade();
+    void SendCancelTrade(TradeStatus status);
 
     void SendPetitionQueryOpcode(ObjectGuid petitionguid);
 
@@ -510,7 +515,7 @@ public:
     // Locales
     LocaleConstant GetSessionDbcLocale() const { return m_sessionDbcLocale; }
     LocaleConstant GetSessionDbLocaleIndex() const { return m_sessionDbLocaleIndex; }
-    char const* GetAcoreString(uint32 entry) const;
+    std::string GetAcoreString(uint32 entry) const;
     std::string const* GetModuleString(std::string module, uint32 id) const;
 
     uint32 GetLatency() const { return m_latency; }
@@ -1104,22 +1109,21 @@ protected:
     {
         friend class World;
     public:
-        DosProtection(WorldSession* s);
-        bool EvaluateOpcode(WorldPacket& p, time_t time) const;
-    protected:
-        enum Policy
+        enum class Policy
         {
-            POLICY_LOG,
-            POLICY_KICK,
-            POLICY_BAN
+            Process,
+            Kick,
+            Ban,
+            Log,
+            BlockingThrottle,
+            DropPacket
         };
 
-        uint32 GetMaxPacketCounterAllowed(uint16 opcode) const;
-
+        DosProtection(WorldSession* s);
+        Policy EvaluateOpcode(WorldPacket const& p, time_t const time) const;
+    protected:
         WorldSession* Session;
-
     private:
-        Policy _policy;
         typedef std::unordered_map<uint16, PacketCounter> PacketThrottlingMap;
         // mark this member as "mutable" so it can be modified even in const functions
         mutable PacketThrottlingMap _PacketThrottlingMap;
@@ -1159,6 +1163,7 @@ private:
     bool _skipQueue;
     uint32 _accountId;
     std::string _accountName;
+    uint32 _accountFlags;
     uint8 m_expansion;
     uint32 m_total_time;
 
