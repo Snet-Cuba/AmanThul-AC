@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -174,7 +174,7 @@ struct npc_pet_dk_ebon_gargoyle : ScriptedAI
             std::list<Unit*> targets;
             Acore::AnyUnfriendlyUnitInObjectRangeCheck u_check(me, me, 50.0f);
             Acore::UnitListSearcher<Acore::AnyUnfriendlyUnitInObjectRangeCheck> searcher(me, targets, u_check);
-            Cell::VisitAllObjects(me, searcher, 50.0f);
+            Cell::VisitObjects(me, searcher, 50.0f);
             for (auto const& target : targets)
                 if (target->GetAura(SPELL_DK_SUMMON_GARGOYLE_1, me->GetOwnerGUID()))
                 {
@@ -245,6 +245,20 @@ struct npc_pet_dk_ghoul : public CombatAI
 {
     npc_pet_dk_ghoul(Creature* c) : CombatAI(c) { }
 
+    void IsSummonedBy(WorldObject* summoner) override
+    {
+        if (!summoner || !summoner->IsPlayer())
+            return;
+
+        Player* player = summoner->ToPlayer();
+
+        if (Unit* victim = player->GetVictim())
+        {
+            me->Attack(victim, true);
+            me->GetMotionMaster()->MoveChase(victim);
+        }
+    }
+
     void JustDied(Unit* /*who*/) override
     {
         if (me->IsGuardian() || me->IsSummon())
@@ -277,6 +291,28 @@ struct npc_pet_dk_army_of_the_dead : public CombatAI
     {
         CombatAI::InitializeAI();
         ((Minion*)me)->SetFollowAngle(rand_norm() * 2 * M_PI);
+    }
+
+    void IsSummonedBy(WorldObject* summoner) override
+    {
+        if (Unit* owner = summoner->ToUnit())
+        {
+            Unit* victim = owner->GetVictim();
+
+            if (victim && me->IsValidAttackTarget(victim))
+            {
+                AttackStart(victim);
+            }
+            else
+            {
+                // If there is no valid target, attack the nearest enemy within 30m
+                if (Unit* nearest = me->SelectNearbyTarget(nullptr, 30.0f))
+                {
+                    if (me->IsValidAttackTarget(nearest))
+                        AttackStart(nearest);
+                }
+            }
+        }
     }
 };
 
